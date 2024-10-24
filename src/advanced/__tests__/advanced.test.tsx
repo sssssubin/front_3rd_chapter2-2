@@ -13,6 +13,8 @@ import { Coupon } from "../../refactoring/features/coupon/types";
 import { useCart } from "../../refactoring/features/cart";
 import { CartPage } from "../../refactoring/pages/CartPage";
 import { AdminPage } from "../../refactoring/pages/AdminPage";
+import { formatDiscountRate } from "../../refactoring/features/discount/utils/discount";
+import { useProducts, useCoupons } from "../../refactoring/hooks";
 
 const mockProducts: Product[] = [
   {
@@ -270,26 +272,166 @@ describe("advanced > ", () => {
     });
   });
 
-  describe("자유롭게 작성해보세요.", () => {
-    test("장바구니에 제품을 추가해야 합니다.", () => {
-      const { result } = renderHook(() => useCart());
+  describe("도메인별 테스트", () => {
+    describe("Cart Domain >", () => {
+      describe("useCart Hook >", () => {
+        const mockProduct = mockProducts[0];
 
-      act(() => {
-        result.current.addItem({
-          id: "1",
-          name: "Test Product",
-          price: 100,
-          stock: 5,
-          discounts: [],
+        test("상품을 장바구니에 추가할 수 있다", () => {
+          const { result } = renderHook(() => useCart());
+
+          act(() => {
+            result.current.addItem(mockProduct);
+          });
+
+          expect(result.current.items).toHaveLength(1);
+          expect(result.current.items[0].quantity).toBe(1);
+        });
+
+        test("상품 수량을 업데이트할 수 있다", () => {
+          const { result } = renderHook(() => useCart());
+
+          act(() => {
+            result.current.addItem(mockProduct);
+            result.current.updateQuantity(mockProduct.id, 3);
+          });
+
+          expect(result.current.items[0].quantity).toBe(3);
+        });
+
+        test("재고보다 많은 수량을 추가할 수 없다", () => {
+          const { result } = renderHook(() => useCart());
+
+          act(() => {
+            result.current.addItem(mockProduct);
+            result.current.updateQuantity(
+              mockProduct.id,
+              mockProduct.stock + 5
+            );
+          });
+
+          expect(result.current.items[0].quantity).toBe(mockProduct.stock);
+        });
+
+        test("할인이 올바르게 계산된다", () => {
+          const { result } = renderHook(() => useCart());
+
+          act(() => {
+            result.current.addItem(mockProduct);
+            result.current.updateQuantity(mockProduct.id, 10); // 10개 이상 시 10% 할인
+          });
+
+          const total = result.current.calculateTotal();
+          expect(total.totalBeforeDiscount).toBe(100000); // 10000 * 10
+          expect(total.totalDiscount).toBe(10000); // 10% 할인
+          expect(total.totalAfterDiscount).toBe(90000);
+        });
+      });
+    });
+
+    describe("Product Domain >", () => {
+      describe("useProducts Hook >", () => {
+        test("상품 목록을 초기화할 수 있다", () => {
+          const { result } = renderHook(() => useProducts(mockProducts));
+          expect(result.current.products).toHaveLength(mockProducts.length);
+        });
+
+        test("상품을 추가할 수 있다", () => {
+          const { result } = renderHook(() => useProducts(mockProducts));
+          const newProduct: Product = {
+            id: "p4",
+            name: "상품4",
+            price: 15000,
+            stock: 30,
+            discounts: [],
+          };
+
+          act(() => {
+            result.current.addProduct(newProduct);
+          });
+
+          expect(result.current.products).toHaveLength(mockProducts.length + 1);
+          expect(result.current.products).toContainEqual(newProduct);
+        });
+
+        test("상품을 수정할 수 있다", () => {
+          const { result } = renderHook(() => useProducts(mockProducts));
+          const updatedProduct = {
+            ...mockProducts[0],
+            name: "수정된 상품1",
+          };
+
+          act(() => {
+            result.current.updateProduct(updatedProduct);
+          });
+
+          expect(result.current.products[0].name).toBe("수정된 상품1");
+        });
+      });
+    });
+
+    describe("Coupon Domain >", () => {
+      describe("useCoupons Hook >", () => {
+        test("쿠폰 목록을 초기화할 수 있다", () => {
+          const { result } = renderHook(() => useCoupons(mockCoupons));
+          expect(result.current.coupons).toHaveLength(mockCoupons.length);
+        });
+
+        test("새로운 쿠폰을 추가할 수 있다", () => {
+          const { result } = renderHook(() => useCoupons(mockCoupons));
+          const newCoupon: Coupon = {
+            name: "새 쿠폰",
+            code: "NEW20",
+            discountType: "percentage",
+            discountValue: 20,
+          };
+
+          act(() => {
+            result.current.addCoupon(newCoupon);
+          });
+
+          expect(result.current.coupons).toHaveLength(mockCoupons.length + 1);
+          expect(result.current.coupons).toContainEqual(newCoupon);
         });
       });
 
-      expect(result.current.items).toHaveLength(1);
-      expect(result.current.items[0].quantity).toBe(1);
+      describe("Coupon Calculations >", () => {
+        test("금액 할인이 올바르게 적용된다", () => {
+          const { result } = renderHook(() => useCart());
+          const amountCoupon = mockCoupons[0]; // 5000원 할인 쿠폰
+
+          act(() => {
+            result.current.addItem(mockProducts[0]);
+            result.current.applyCoupon(amountCoupon);
+          });
+
+          const total = result.current.calculateTotal();
+          expect(total.totalAfterDiscount).toBe(5000); // 10000 - 5000
+        });
+
+        test("비율 할인이 올바르게 적용된다", () => {
+          const { result } = renderHook(() => useCart());
+          const percentageCoupon = mockCoupons[1]; // 10% 할인 쿠폰
+
+          act(() => {
+            result.current.addItem(mockProducts[0]);
+            result.current.applyCoupon(percentageCoupon);
+          });
+
+          const total = result.current.calculateTotal();
+          expect(total.totalAfterDiscount).toBe(9000); // 10000 * 0.9
+        });
+      });
     });
 
-    test("새로운 hook 함수르 만든 후에 테스트 코드를 작성해서 실행해보세요", () => {
-      expect(true).toBe(false);
+    describe("Utils Tests >", () => {
+      describe("Format Utils >", () => {
+        test("할인율이 올바르게 포맷팅된다", () => {
+          expect(formatDiscountRate(0.1)).toBe("10%");
+          expect(formatDiscountRate(0.05)).toBe("5%");
+          expect(formatDiscountRate(0.15)).toBe("15%");
+        });
+      });
     });
   });
 });
