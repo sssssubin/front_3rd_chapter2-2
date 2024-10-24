@@ -1,9 +1,7 @@
 import { useState } from "react";
-import {
-  Coupon,
-  Discount,
-  Product,
-} from "../../refactoring/shared/types/types";
+import { Product } from "../features/product/types";
+import { Coupon } from "../features/coupon/types";
+import { Discount } from "../features/discount/types";
 
 interface Props {
   products: Product[];
@@ -22,10 +20,7 @@ export const AdminPage = ({
 }: Props) => {
   const [openProductIds, setOpenProductIds] = useState<Set<string>>(new Set());
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
-  const [newDiscount, setNewDiscount] = useState<Discount>({
-    quantity: 0,
-    rate: 0,
-  });
+  const [newDiscount, setNewDiscount] = useState<Discount>({ quantity: 0, rate: 0 });
   const [newCoupon, setNewCoupon] = useState<Coupon>({
     name: "",
     code: "",
